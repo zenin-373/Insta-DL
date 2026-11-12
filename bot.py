@@ -53,14 +53,26 @@ def download_post(url, folder):
     command = [
         "gallery-dl",
         "--no-input",
-        "--quiet",
+        "--verbose",
+        "--http-timeout", "25",
+        "--retries", "1",
         "--directory", folder,
         "--filesize-max", str(MAX_BYTES),
         url,
     ]
-    result = subprocess.run(
-        command, capture_output=True, text=True, timeout=240, check=False
-    )
+    try:
+        result = subprocess.run(
+            command, capture_output=True, text=True, timeout=150, check=False
+        )
+    except subprocess.TimeoutExpired as exc:
+        detail = (exc.stderr or exc.stdout or "")
+        if isinstance(detail, bytes):
+            detail = detail.decode("utf-8", errors="replace")
+        log.error("gallery-dl timed out. Output: %s", detail[-2000:])
+        raise RuntimeError(
+            "Instagram did not respond before the 150-second limit. "
+            "This can happen when Instagram blocks unauthenticated server requests."
+        ) from exc
     paths = [
         path for path in Path(folder).rglob("*")
         if path.is_file()
