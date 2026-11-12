@@ -1,0 +1,1 @@
+python-telegram-bot[webhooks]==21.10\nyt-dlp>=2025.1.15\n
