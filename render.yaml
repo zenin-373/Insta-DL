@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: insta-dl
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    healthCheckPath: /
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: TARGET_GROUP_ID
+        sync: false
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: MAX_FILE_MB
+        value: "49"
