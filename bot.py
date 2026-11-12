@@ -10,7 +10,7 @@ log = logging.getLogger("insta-dl")
 TOKEN = os.environ["BOT_TOKEN"]
 TARGET_GROUP_ID = os.getenv("TARGET_GROUP_ID")
 MAX_BYTES = int(os.getenv("MAX_FILE_MB", "49")) * 1024 * 1024
-URL_RE = re.compile(r"https?://(?:www\\.)?(?:instagram\\.com|instagr\\.am)/[^\\s]+", re.I)
+URL_RE = re.compile(r"https?://(?:www\.)?(?:instagram\.com|instagr\.am)/[^\s]+", re.I)
 PHOTO_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 VIDEO_EXTS = {".mp4", ".m4v", ".mov", ".webm"}
 
@@ -45,7 +45,7 @@ def download_reel(url, folder):
 
 def natural_key(path):
     return [int(part) if part.isdigit() else part.lower()
-            for part in re.split(r"(\\d+)", path.name)]
+            for part in re.split(r"(\d+)", path.name)]
 
 
 def download_post(url, folder):
