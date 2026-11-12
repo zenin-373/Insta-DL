@@ -78,8 +78,10 @@ async def send_media(context, chat_id, paths):
     for path in paths:
         suffix = Path(path).suffix.lower()
         with open(path, "rb") as media:
-            if suffix in PHOTO_EXTS:
+            if suffix in PHOTO_EXTS and Path(path).stat().st_size <= 10 * 1024 * 1024:
                 await context.bot.send_photo(chat_id=chat_id, photo=media, read_timeout=120, write_timeout=120)
+            elif suffix in PHOTO_EXTS:
+                await context.bot.send_document(chat_id=chat_id, document=media, read_timeout=120, write_timeout=120)
             elif suffix in VIDEO_EXTS:
                 await context.bot.send_video(
                     chat_id=chat_id, video=media, supports_streaming=True,
