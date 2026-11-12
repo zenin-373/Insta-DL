@@ -1,4 +1,4 @@
-import asyncio, hmac, logging, os, re, signal, tempfile
+import asyncio, hmac, logging, os, re, signal, subprocess, tempfile
 from pathlib import Path
 from aiohttp import web
 from telegram import Update
@@ -10,10 +10,12 @@ log = logging.getLogger("insta-dl")
 TOKEN = os.environ["BOT_TOKEN"]
 TARGET_GROUP_ID = os.getenv("TARGET_GROUP_ID")
 MAX_BYTES = int(os.getenv("MAX_FILE_MB", "49")) * 1024 * 1024
-URL_RE = re.compile(r"https?://(?:www\.)?(?:instagram\.com|instagr\.am)/[^\s]+", re.I)
+URL_RE = re.compile(r"https?://(?:www\\.)?(?:instagram\\.com|instagr\\.am)/[^\\s]+", re.I)
+PHOTO_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+VIDEO_EXTS = {".mp4", ".m4v", ".mov", ".webm"}
 
 
-def download(url, folder):
+def download_reel(url, folder):
     opts = {
         "outtmpl": str(Path(folder) / "%(id)s.%(ext)s"),
         "format": "best[ext=mp4]/best",
@@ -41,6 +43,50 @@ def download(url, folder):
         return paths
 
 
+def natural_key(path):
+    return [int(part) if part.isdigit() else part.lower()
+            for part in re.split(r"(\\d+)", path.name)]
+
+
+def download_post(url, folder):
+    # gallery-dl handles single-image and carousel posts, including mixed media.
+    command = [
+        "gallery-dl",
+        "--no-input",
+        "--quiet",
+        "--directory", folder,
+        "--filesize-max", str(MAX_BYTES),
+        url,
+    ]
+    result = subprocess.run(
+        command, capture_output=True, text=True, timeout=240, check=False
+    )
+    paths = [
+        path for path in Path(folder).rglob("*")
+        if path.is_file()
+        and path.stat().st_size <= MAX_BYTES
+        and path.suffix.lower() in PHOTO_EXTS | VIDEO_EXTS
+    ]
+    paths.sort(key=natural_key)
+    if result.returncode != 0 and not paths:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise RuntimeError(detail[-1200:] or "gallery-dl could not extract this post")
+    return [str(path) for path in paths]
+
+
+async def send_media(context, chat_id, paths):
+    for path in paths:
+        suffix = Path(path).suffix.lower()
+        with open(path, "rb") as media:
+            if suffix in PHOTO_EXTS:
+                await context.bot.send_photo(chat_id=chat_id, photo=media, read_timeout=120, write_timeout=120)
+            elif suffix in VIDEO_EXTS:
+                await context.bot.send_video(
+                    chat_id=chat_id, video=media, supports_streaming=True,
+                    read_timeout=120, write_timeout=120
+                )
+
+
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.effective_message
     if not msg or not msg.text:
@@ -51,31 +97,31 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     match = URL_RE.search(msg.text)
     if not match:
         return
+
+    url = match.group(0).rstrip(").,!?]}")
     status = await msg.reply_text("Downloading…")
     try:
         with tempfile.TemporaryDirectory(prefix="instadl_") as tmp:
-            paths = download(match.group(0), tmp)
+            # Keep yt-dlp for Reels; use gallery-dl for regular posts/carousels.
+            if re.search(r"/(?:reel|reels)/", url, re.I):
+                paths = await asyncio.to_thread(download_reel, url, tmp)
+            else:
+                paths = await asyncio.to_thread(download_post, url, tmp)
+
             if not paths:
-                await status.edit_text("No downloadable media found (or the file exceeds the upload limit).")
+                await status.edit_text("No supported photo or video media found (or the file exceeds the upload limit).")
                 return
             await status.delete()
-            for path in paths:
-                with open(path, "rb") as media:
-                    await context.bot.send_video(
-                        chat_id=update.effective_chat.id,
-                        video=media,
-                        supports_streaming=True,
-                        read_timeout=120,
-                        write_timeout=120,
-                    )
-    except Exception:
+            await send_media(context, update.effective_chat.id, paths)
+    except Exception as exc:
         log.exception("Download failed")
-        try:
-            await status.edit_text(
-                "Download failed. The post may be private, unavailable, or require Instagram cookies."
-            )
-        except Exception:
-            pass
+        message = str(exc).strip()
+        # Keep user-facing errors useful without exposing long tracebacks or credentials.
+        if "There is no video in this post" in message:
+            message = "No video found. If this is a photo post or carousel, try the gallery-dl extractor."
+        elif not message:
+            message = "The post could not be downloaded. It may be unavailable or restricted by Instagram."
+        await status.edit_text(f"Download failed: {message[:700]}")
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
