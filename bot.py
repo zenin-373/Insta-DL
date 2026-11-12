@@ -135,7 +135,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message = "No video found. If this is a photo post or carousel, try the gallery-dl extractor."
         elif not message:
             message = "The post could not be downloaded. It may be unavailable or restricted by Instagram."
-        await status.edit_text(f"Download failed: {message[:700]}")
+        await status.edit_text(f"Download failed (last error details): {message[-700:]}")
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
