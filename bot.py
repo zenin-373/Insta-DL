@@ -10,7 +10,7 @@ log = logging.getLogger("insta-dl")
 TOKEN = os.environ["BOT_TOKEN"]
 TARGET_GROUP_ID = os.getenv("TARGET_GROUP_ID")
 MAX_BYTES = int(os.getenv("MAX_FILE_MB", "49")) * 1024 * 1024
-URL_RE = re.compile(r"https?://(?:www\\.)?(?:instagram\\.com|instagr\\.am)/[^\\s]+", re.I)
+URL_RE = re.compile(r"https?://(?:www\.)?(?:instagram\.com|instagr\.am)/[^\s]+", re.I)
 
 
 def download(url, folder):
