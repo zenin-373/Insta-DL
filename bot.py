@@ -2,7 +2,7 @@ import asyncio, hmac, logging, os, re, signal, subprocess, tempfile
 from pathlib import Path
 from aiohttp import web
 from telegram import Update
-from telegram.ext import Application, MessageHandler, ContextTypes, filters
+from telegram.ext import Application, MessageHandler, CommandHandler, ContextTypes, filters
 from yt_dlp import YoutubeDL
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -127,6 +127,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    log.info("Processing /start from chat %s", update.effective_chat.id if update.effective_chat else "unknown")
     if update.effective_message:
         await update.effective_message.reply_text(
             "I'm online. Send an Instagram post or Reel link."
@@ -149,6 +150,7 @@ async def run_webhook(application: Application, host: str, port: int):
         try:
             payload = await request.json()
             update = Update.de_json(payload, application.bot)
+            log.info("Received Telegram update: %s", update.update_id)
         except Exception:
             return web.Response(status=400, text="Invalid update")
         await application.update_queue.put(update)
@@ -190,9 +192,7 @@ async def run_webhook(application: Application, host: str, port: int):
 
 def main():
     application = Application.builder().token(TOKEN).build()
-    application.add_handler(
-        MessageHandler(filters.COMMAND & filters.Regex(r"^/start"), start_command)
-    )
+    application.add_handler(CommandHandler("start", start_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
     port = int(os.getenv("PORT", "10000"))
