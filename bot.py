@@ -15,6 +15,21 @@ PHOTO_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 VIDEO_EXTS = {".mp4", ".m4v", ".mov", ".webm"}
 
 
+def instagram_cookie_file():
+    """Write the Render cookie secret to a private temporary file for the extractors."""
+    cookie_text = os.getenv("INSTAGRAM_COOKIES", "").strip()
+    if not cookie_text:
+        return None
+
+    cookie_path = Path(tempfile.gettempdir()) / "instagram_cookies.txt"
+    cookie_path.write_text(cookie_text + "\n", encoding="utf-8")
+    try:
+        cookie_path.chmod(0o600)
+    except OSError:
+        log.warning("Could not restrict permissions on the temporary Instagram cookie file")
+    return str(cookie_path)
+
+
 def download_reel(url, folder):
     opts = {
         "outtmpl": str(Path(folder) / "%(id)s.%(ext)s"),
@@ -26,6 +41,10 @@ def download_reel(url, folder):
         "restrictfilenames": True,
         "max_filesize": MAX_BYTES,
     }
+    cookie_file = instagram_cookie_file()
+    if cookie_file:
+        opts["cookiefile"] = cookie_file
+
     with YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
         entries = info.get("entries") or [info]
@@ -58,8 +77,11 @@ def download_post(url, folder):
         "--retries", "1",
         "--directory", folder,
         "--filesize-max", str(MAX_BYTES),
-        url,
     ]
+    cookie_file = instagram_cookie_file()
+    if cookie_file:
+        command.extend(["--cookies", cookie_file])
+    command.append(url)
     try:
         result = subprocess.run(
             command, capture_output=True, text=True, timeout=150, check=False
